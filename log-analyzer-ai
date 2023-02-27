@@ -1,0 +1,64 @@
+import pandas as pd
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
+import request
+
+# Configurações da API do ServiceDesk
+URL_BASE = "API_SERVICEDESK"
+CHAVE_ACESSO = "<sua_chave_de_acesso>"
+
+# Carregar dados rotulados
+dados = pd.read_csv('dados_rotulados.csv') 
+
+# Pré-processar dados
+dados = dados.drop(['id_alerta', 'data_alerta', 'descricao'], axis=1)
+dados = pd.get_dummies(dados, columns=['tipo_alerta', 'severidade', 'origem'])
+
+# Dividir dados em conjuntos de treinamento e teste
+X = dados.drop('rotulo', axis=1)
+y = dados['rotulo']
+X_treino, X_teste, y_treino, y_teste = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Treinar modelo de IA
+modelo = DecisionTreeClassifier()
+modelo.fit(X_treino, y_treino)
+
+# Avaliar desempenho do modelo de IA
+y_pred = modelo.predict(X_teste)
+matriz_confusao = confusion_matrix(y_teste, y_pred)
+print(matriz_confusao) 
+
+# Usar modelo de IA para prever falsos positivos
+dados_novos = pd.read_csv('dados_novos.csv')
+dados_novos = pd.get_dummies(dados_novos, columns=['tipo_alerta', 'severidade', 'origem'])
+y_pred_novos = modelo.predict(dados_novos)
+print(y_pred_novos)
+
+# Criação de tickets e validação automática dos alertas
+for i, alerta in dados_novos.iterrows():
+    if y_pred_novos[i] == 1:
+        # Alerta falso positivo identificado - criar ticket no ServiceDesk
+        titulo = f"Alerta falso positivo - {alerta['descricao']}"
+        descricao = f"""
+            O alerta de tipo {alerta['tipo_alerta']} com severidade {alerta['severidade']} e origem {alerta['origem']} foi classificado como falso positivo pelo modelo de IA.
+            Por favor, verifique e atualize as regras de detecção de ameaças se necessário.
+        """
+        # Criar ticket no ServiceDesk
+        ticket_data = {
+            "subject": titulo,
+            "description": descricao,
+            "type": 3,  # incidente
+            "category": 7,  # segurança da informação
+            "urgency": 3,  # média
+            "impact": 3,  # médio
+            "person": {
+                "email": "<seu_email>",
+            },
+            "tags": ["alerta_falso_positivo"],
+            "customFields": [
+                {"fieldKey": "<sua_chave_custom_field>", "fieldValue": alerta['id_alerta']},
+            ],
+        }
+        headers = {
+            "Content-Type": "
